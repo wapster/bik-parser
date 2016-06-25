@@ -91,40 +91,112 @@ register_activation_hook( __FILE__, 'bik_parser_install' );
 function bik_parser_install() {
 
 	// 1. СОЗДАЕМ СТРУКТУРУ ПАПОК ДЛЯ ХРАНЕНИЯ ДАННЫХ
-	$upload = wp_upload_dir();
-	$upload_dir = $upload['basedir'];
-
-    // Создаем общую папку `bik` в wp-content/uploads
-    $upload_dir = $upload_dir . '/bik';
-    wp_mkdir_p( $upload_dir );
-
-    // Создаем папку для *sql файлов
-    $sql_dir = $upload_dir . '/sql';
-    wp_mkdir_p( $sql_dir );
-
-    // Создаем директорию для *dbf файлов
-    $dbf_dir = $upload_dir . '/dbf';
-    wp_mkdir_p( $dbf_dir );
-
-    // Создаем директорию для архива
-    $zip_dir = $upload_dir . '/zip';
-    wp_mkdir_p( $zip_dir );
-
-    // Создаем архивный файл
-    $zip_file = $zip_dir.'/db_bik.zip';
-    file_put_contents( $zip_file, '');
+	// $upload = wp_upload_dir();
+	// $upload_dir = $upload['basedir'];
+	//
+    // // Создаем общую папку `bik` в wp-content/uploads
+    // $upload_dir = $upload_dir . '/bik';
+    // wp_mkdir_p( $upload_dir );
+	//
+	// // Создаем пустой файл index.php чтобы исключить просмотр директории
+	// file_put_contents( $upload_dir.'/index.php', '<?php // Silence is golden.' );
+	//
+    // // Создаем папку для *sql файлов
+    // $sql_dir = $upload_dir . '/sql';
+    // wp_mkdir_p( $sql_dir );
+	//
+    // // Создаем директорию для *dbf файлов
+    // $dbf_dir = $upload_dir . '/dbf';
+    // wp_mkdir_p( $dbf_dir );
+	//
+    // // Создаем директорию для архива
+    // $zip_dir = $upload_dir . '/zip';
+    // wp_mkdir_p( $zip_dir );
+	//
+    // // Создаем архивный файл
+    // $zip_file = $zip_dir.'/db_bik.zip';
+    // file_put_contents( $zip_file, '');
 
 
 
 	// 2. СОЗДАЕМ ТАБЛИЦЫ В БАЗЕ ДАННЫХ
 	global $wpdb;
-	$table_name = $wpdb->prefix . 'bik';			 //задаем имя таблицы
-	$charset_collate = $wpdb->get_charset_collate(); //определяем кодировку
+	$charset_collate = $wpdb->get_charset_collate(); // определяем кодировку
 
-	$sql = "CREATE TABLE IF NOT EXISTS `$table_name` ( `id` INT NOT NULL AUTO_INCREMENT , `bik` INT NOT NULL , `nameBank` VARCHAR(100) NOT NULL , PRIMARY KEY (`id`)) ENGINE = InnoDB, $charset_collate;";
+	/********** # 1 - BNKSEEK ********/
+	$table_bnkseek = $wpdb->prefix . 'bik_bnkseek';
+	$sql_bnkseek = "CREATE TABLE IF NOT EXISTS $table_bnkseek (
+					VKEY		Char(8),
+					VREAL       Char(4), /* оригинальное название поля REAL*/
+					PZN         Char(2),
+					UER         Char(1),
+					RGN         Char(2),
+					IND         Char(6),
+					TNP         Char(1),
+					NNP         Char(25),
+					ADR         Char(30),
+					RKC         Char(9),
+					NAMEP       Char(45),
+					NAMEN       Char(30),
+					NEWNUM      Char(9),
+					NEWKS       Char(9),
+					PERMFO      Char(6),
+					SROK        Char(2),
+					AT1         Char(7),
+					AT2         Char(7),
+					TELEF       Char(25),
+					REGN        Char(9),
+					OKPO        Char(8),
+					DT_IZM      DateTime,
+					CKS         Char(6),
+					KSNP        Char(20),
+					DATE_IN     DateTime,
+					DATE_CH		DateTime,
+					VKEYDEL		Char(8),
+					DT_IZMR		DateTime) ENGINE = InnoDB, $charset_collate";
 
 	require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
-	dbDelta( $sql );
+	dbDelta( $sql_bnkseek );
+
+	/********** # 2 - REG ********/
+	$table_reg = $wpdb->prefix . 'bik_reg';
+	$sql_reg = "CREATE TABLE IF NOT EXISTS $table_reg (
+					VKEY    Char(2),
+					RGN     Char(2),
+					NAME    Char(40),
+					CENTER  Char(30),
+					NAMET	Char(40)
+					) ENGINE = InnoDB, $charset_collate";
+
+	require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+	dbDelta( $sql_reg );
+
+
+	/********** # 3 - RCLOSE ********/
+	$table_rclose = $wpdb->prefix . 'bik_rclose';
+	$sql_rclose = "CREATE TABLE IF NOT EXISTS $table_rclose (
+					VKEY		Char(2),
+					R_CLOSE     Char(2),
+					NAMECLOSE   Char(45)
+					) ENGINE = InnoDB, $charset_collate";
+
+	require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+	dbDelta( $sql_rclose );
+
+
+
+	/********** # 4 - REAL ********/
+	$table_real = $wpdb->prefix . 'bik_real';
+	$sql_real = "CREATE TABLE IF NOT EXISTS $table_real (
+					VKEY		Char(4),
+					VREAL       Char(4), /* оригинальное название поля REAL */
+					NAME_OGR    Char(60)
+					) ENGINE = InnoDB, $charset_collate";
+
+	require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+	dbDelta( $sql_real );
+
+
 
 
 	// 3. СКАЧИВАЕМ И РАСПАКОВЫВАЕМ СВЕЖУЮ ВЕРСИЮ БАЗЫ ДАННЫХ С САЙТА ЦБ РФ
@@ -232,14 +304,6 @@ function getRegion( $bik ) {
 // Функция отображения страницы настроек
 function bik_parser_mainmenu() {
 	echo "<p>контент страницы настроек</p>";
-
-	$db_dir = plugin_dir_path( __FILE__ ) . 'db';
-	$db_file = array_slice( scandir( $db_dir ), 2);
-
-	//echo "<h4>В папке /db обнаружен файл <code>" . $db_file[0] ."</code>";
-	//echo "Дата изменения: ". date ("d.m.Y H:i.", filemtime( $db_dir."/".$db_file[0] ) ) ."</h4>";
-
-
 	echo "
 	<form action='' method='POST'>
 		<!-- <input type='submit' name='add_dump' value='Обновить базу'> -->
@@ -256,7 +320,7 @@ function bik_parser_mainmenu() {
 	}
 
 
-	if ( !empty ( $_POST['sync'] ) ) {
+	if ( !empty( $_POST['sync'] ) ) {
 
 
 		// Получаем данные для работы
@@ -392,6 +456,21 @@ function bik_parser_mainmenu() {
 
 
 	if ( !empty ($_POST['testing'] ) ) {
+
+		// SHOW COLUMNS FROM `wp_bik_real`
+
+
+		global $wpdb;
+		$fields = $wpdb->get_results( $wpdb->prepare( "SHOW COLUMNS FROM `wp_bik_real`", null), ARRAY_A );
+		echo "<pre>";
+		print_r( $fields );
+		echo "</pre>";
+		// $params = array(
+		// 	'VKEY' => '001',
+		// 	'VREAL' => '',
+		// 	'NAME_OGR' => 'УЧАСТВУЕТ В РАСЧЕТАХ'
+		// );
+		// $wpdb->insert( $table_real, $params);
 
 	}
 
