@@ -223,54 +223,55 @@ function bik_parser_install() {
 
 
 	// 4. КОНВЕРТИРУЕМ И ЗАГРУЖАЕМ ДАННЫЕ В ТАБЛИЦЫ (BNKSEEK, REG, ...))
+	global $wpdb;
+
+	$upload = wp_upload_dir();
+	$upload_dir = $upload['basedir'];
+	$dbf_dir = $upload_dir . '/bik/dbf/';
 
 	// Выбираем нужные таблицы
-	// $data_base = array( 'bnkseek.dbf', 'reg.dbf', 'rclose.dbf', 'real.dbf' );
+	$data_base = array( 'bnkseek', 'reg', 'rclose', 'real' );
 
-	// foreach ($data_base as $table) {
-	//
-	// 	$path_to_dbf_dir = // см п. 1 ($dbf_dir);
-	// 	$db = dbase_open( $path_to_dbf_dir . "/" . $table, 0 );
-	//
-	// 	if ( $db ) {
-	//
-	// 		// Получаем имена колонок
-	// 		$colomns = dbase_get_header_info( $db );
-	// 		$colomns_name = array();
-	//
-	// 		foreach ($colomns as $key => $value) {
-	// 			if ( $value['name'] == 'REAL') {
-	// 				$value['name'] = 'VREAL';
-	// 			}
-	// 			$colomns_name[] = $value['name'];
-	// 		}
-	//
-	// 		// Кол-во записей в БД
-	// 		$x = dbase_numrecords( $db );
-	//
-	// 		for ($i=1; $i <= $x; $i++) {
-	// 			$rows = dbase_get_record_with_names( $db, $i );
-	// 			$a = array();
-	// 			foreach ($rows as $k => $v) {
-	// 				$v = iconv( "cp866", "utf-8", $v);
-	// 				$a[] = $v;
-	// 			}
-	// 			array_pop( $a ); // удаляем пустой элемент
-	//
-	// 			$combine = array_combine( $colomns_name, $a );
-	//
-	// 			// Делаем запись в БД !!!!
-	// 			// МАССИВ $combine передаем в качестве параметра
-	// 			// при вызове $wpdb->insert
-	//
-	// 		}
-	//
-	// 	dbase_close( $db );
-	//
-	// 	}
-	//
-	// }
+	foreach ($data_base as $table) {
+		$db = dbase_open( $dbf_dir . $table . ".dbf", 0 );
+		if ( $db ) {
 
+			// Получаем имена колонок
+			$colomns = dbase_get_header_info( $db );
+			$colomns_name = array();
+
+			foreach ($colomns as $key => $value) {
+				if ( $value['name'] == 'REAL') {
+					$value['name'] = 'VREAL';
+				}
+				$colomns_name[] = $value['name'];
+			}
+
+			// Кол-во записей в БД
+			$x = dbase_numrecords( $db );
+
+			for ($i=1; $i <= $x; $i++) {
+				$rows = dbase_get_record_with_names( $db, $i );
+				$a = array();
+				foreach ($rows as $k => $v) {
+					$v = iconv( "cp866", "utf-8", $v);
+					$a[] = $v;
+				}
+				array_pop( $a ); // удаляем пустой элемент
+
+				$combine = array_combine( $colomns_name, $a );
+
+				// Делаем запись в БД !!!!
+				// МАССИВ $combine передаем в качестве параметра
+				// при вызове $wpdb->insert
+				$wpdb->insert( $wpdb->prefix."bik_".$table, $combine );
+			}
+
+		dbase_close( $db );
+
+		}
+
+	}
 
 	// 5. ЗАГРУЖАЕМ ДАННЫЕ В `WP_POSTS`(формируем посты)
 	// --- запланированные записи (`post_status` = 'future')
@@ -496,26 +497,56 @@ function bik_parser_mainmenu() {
 
 
 	if ( !empty ($_POST['testing'] ) ) {
-
-		// SHOW COLUMNS FROM `wp_bik_real`
-
-
 		global $wpdb;
-		$fields = $wpdb->get_results( $wpdb->prepare( "SHOW COLUMNS FROM `wp_bik_real`", null), ARRAY_A );
 
-		foreach ($fields as $key => $value) {
-			echo $value['Field']."<br>";
+		$data_base = array( 'bnkseek', 'rclose', 'real', 'reg');
+
+		$upload = wp_upload_dir();
+		$upload_dir = $upload['basedir'];
+
+		$dbf_dir = $upload_dir . '/bik/dbf/';
+
+		foreach ($data_base as $table) {
+			$db = dbase_open( $dbf_dir . $table . ".dbf", 0 );
+			if ( $db ) {
+
+				// Получаем имена колонок
+				$colomns = dbase_get_header_info( $db );
+				$colomns_name = array();
+
+				foreach ($colomns as $key => $value) {
+					if ( $value['name'] == 'REAL') {
+						$value['name'] = 'VREAL';
+					}
+					$colomns_name[] = $value['name'];
+				}
+
+				// Кол-во записей в БД
+				$x = dbase_numrecords( $db );
+
+				for ($i=1; $i <= $x; $i++) {
+					$rows = dbase_get_record_with_names( $db, $i );
+					$a = array();
+					foreach ($rows as $k => $v) {
+						$v = iconv( "cp866", "utf-8", $v);
+						$a[] = $v;
+					}
+					array_pop( $a ); // удаляем пустой элемент
+
+					$combine = array_combine( $colomns_name, $a );
+
+					// Делаем запись в БД !!!!
+					// МАССИВ $combine передаем в качестве параметра
+					// при вызове $wpdb->insert
+					$wpdb->insert( $wpdb->prefix."bik_".$table, $combine );
+				}
+
+			dbase_close( $db );
+
+			}
+
 		}
 
-		echo "<pre>";
-		print_r( $fields );
-		echo "</pre>";
-		// $params = array(
-		// 	'VKEY' => '001',
-		// 	'VREAL' => '',
-		// 	'NAME_OGR' => 'УЧАСТВУЕТ В РАСЧЕТАХ'
-		// );
-		// $wpdb->insert( $table_real, $params);
 
 	}
 
