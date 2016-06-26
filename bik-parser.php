@@ -91,35 +91,59 @@ register_activation_hook( __FILE__, 'bik_parser_install' );
 function bik_parser_install() {
 
 	// 1. СОЗДАЕМ СТРУКТУРУ ПАПОК ДЛЯ ХРАНЕНИЯ ДАННЫХ
-	// $upload = wp_upload_dir();
-	// $upload_dir = $upload['basedir'];
-	//
-    // // Создаем общую папку `bik` в wp-content/uploads
-    // $upload_dir = $upload_dir . '/bik';
-    // wp_mkdir_p( $upload_dir );
-	//
-	// // Создаем пустой файл index.php чтобы исключить просмотр директории
-	// file_put_contents( $upload_dir.'/index.php', '<?php // Silence is golden.' );
-	//
-    // // Создаем папку для *sql файлов
-    // $sql_dir = $upload_dir . '/sql';
-    // wp_mkdir_p( $sql_dir );
-	//
-    // // Создаем директорию для *dbf файлов
-    // $dbf_dir = $upload_dir . '/dbf';
-    // wp_mkdir_p( $dbf_dir );
-	//
-    // // Создаем директорию для архива
-    // $zip_dir = $upload_dir . '/zip';
-    // wp_mkdir_p( $zip_dir );
-	//
-    // // Создаем архивный файл
-    // $zip_file = $zip_dir.'/db_bik.zip';
-    // file_put_contents( $zip_file, '');
+	$upload = wp_upload_dir();
+	$upload_dir = $upload['basedir'];
+
+    // Создаем общую папку `bik` в wp-content/uploads
+    $upload_dir = $upload_dir . '/bik';
+    wp_mkdir_p( $upload_dir );
+
+	// Создаем пустой файл index.php чтобы исключить просмотр директории
+	file_put_contents( $upload_dir.'/index.php', '<?php // Silence is golden.' );
+
+    // Создаем директорию для *dbf файлов
+    $dbf_dir = $upload_dir . '/dbf';
+    wp_mkdir_p( $dbf_dir );
+
+    // Создаем директорию для архива
+    $zip_dir = $upload_dir . '/zip';
+    wp_mkdir_p( $zip_dir );
+
+    // Создаем архивный файл
+    $zip_file = $zip_dir.'/db_bik.zip';
+    file_put_contents( $zip_file, '');
 
 
+	// 2. СКАЧИВАЕМ И РАСПАКОВЫВАЕМ СВЕЖУЮ ВЕРСИЮ БАЗЫ ДАННЫХ С САЙТА ЦБ РФ
 
-	// 2. СОЗДАЕМ ТАБЛИЦЫ В БАЗЕ ДАННЫХ
+	date_default_timezone_set("Europe/Moscow");
+	$date_in_link = date('dmY');
+
+	// получаем индекс текущего дня недели (1-понедельник, 7 воскресенье)
+	// и корректруем будущую ссылку (в выходные база не обновляется)
+	$current_day = date( 'N' );
+    if ( $current_day = 6) {
+        $date_in_link = date('d')-1 . date('mY');
+    }
+
+    if ( $current_day = 7) {
+        $date_in_link = date('d')-2 . date('mY');
+    }
+
+	$bik_db_link = 'http://www.cbr.ru/mcirabis/BIK/bik_db_' . $date_in_link . '.zip';
+    $copy_zip_file = copy( $bik_db_link, $zip_file);
+
+	if ( $copy_zip_file ) {
+        $zip = new ZipArchive;
+        $res = $zip->open( $zip_file );
+        if ($res === TRUE) {
+            $zip->extractTo( $dbf_dir );
+            $zip->close();
+        }
+    }
+
+
+	// 3. СОЗДАЕМ ТАБЛИЦЫ В БАЗЕ ДАННЫХ
 	global $wpdb;
 	$charset_collate = $wpdb->get_charset_collate(); // определяем кодировку
 
@@ -198,84 +222,54 @@ function bik_parser_install() {
 
 
 
-
-	// 3. СКАЧИВАЕМ И РАСПАКОВЫВАЕМ СВЕЖУЮ ВЕРСИЮ БАЗЫ ДАННЫХ С САЙТА ЦБ РФ
-    //
-	// date_default_timezone_set("Europe/Moscow");
-	// $date_in_link = date('dmY');
-	//
-	// получаем индекс текущего дня недели (1-понедельник, 7 воскресенье)
-	// и корректруем будущую ссылку (в выходные база необновляется)
-	// $current_day = date( 'N' );
-    // if ( $current_day = 6) {
-    //     $date_in_link = date('d')-1 . date('mY');
-    // }
-	//
-    // if ( $current_day = 7) {
-    //     $date_in_link = date('d')-2 . date('mY');
-    // }
-	//
-	// $bik_db_link = 'http://www.cbr.ru/mcirabis/BIK/bik_db_' . $date_in_link . '.zip';
-    // $copy_zip_file = copy( $bik_db_link, $zip_file);
-	//
-	// if ( $copy_zip_file ) {
-    //     $zip = new ZipArchive;
-    //     $res = $zip->open( $zip_file );
-    //     if ($res === TRUE) {
-    //         $zip->extractTo( $dbf_dir );
-    //         $zip->close();
-    //     }
-    // }
-
-
 	// 4. КОНВЕРТИРУЕМ И ЗАГРУЖАЕМ ДАННЫЕ В ТАБЛИЦЫ (BNKSEEK, REG, ...))
 
 	// Выбираем нужные таблицы
-	$data_base = array( 'bnkseek.dbf', 'reg.dbf', 'rclose.dbf', 'real.dbf' );
+	// $data_base = array( 'bnkseek.dbf', 'reg.dbf', 'rclose.dbf', 'real.dbf' );
 
-	foreach ($data_base as $table) {
-
-		$path_to_dbf_dir = // см п. 1 ($dbf_dir);
-		$db = dbase_open( $path_to_dbf_dir . "/" . $table, 0 );
-
-		if ( $db ) {
-
-			// Получаем имена колонок
-			$colomns = dbase_get_header_info( $db );
-			$colomns_name = array();
-
-			foreach ($colomns as $key => $value) {
-				if ( $value['name'] == 'REAL') {
-					$value['name'] = 'VREAL';
-				}
-				$colomns_name[] = $value['name'];
-			}
-
-			// Кол-во записей в БД
-			$x = dbase_numrecords( $db );
-
-			for ($i=1; $i <= $x; $i++) {
-				$rows = dbase_get_record_with_names( $db, $i );
-				$a = array();
-				foreach ($rows as $k => $v) {
-					$v = iconv( "cp866", "utf-8", $v);
-					$a[] = $v;
-				}
-				array_pop( $a ); // удаляем пустой элемент
-
-				$combine = array_combine( $colomns_name, $a );
-
-				// Делаем запись в БД !!!!
-				// МАССИВ $combine передаем в качестве параметра
-				// при вызове $wpdb->insert
-
-			}
-
-		dbase_close( $db );
-
-		}
-
-	}
+	// foreach ($data_base as $table) {
+	//
+	// 	$path_to_dbf_dir = // см п. 1 ($dbf_dir);
+	// 	$db = dbase_open( $path_to_dbf_dir . "/" . $table, 0 );
+	//
+	// 	if ( $db ) {
+	//
+	// 		// Получаем имена колонок
+	// 		$colomns = dbase_get_header_info( $db );
+	// 		$colomns_name = array();
+	//
+	// 		foreach ($colomns as $key => $value) {
+	// 			if ( $value['name'] == 'REAL') {
+	// 				$value['name'] = 'VREAL';
+	// 			}
+	// 			$colomns_name[] = $value['name'];
+	// 		}
+	//
+	// 		// Кол-во записей в БД
+	// 		$x = dbase_numrecords( $db );
+	//
+	// 		for ($i=1; $i <= $x; $i++) {
+	// 			$rows = dbase_get_record_with_names( $db, $i );
+	// 			$a = array();
+	// 			foreach ($rows as $k => $v) {
+	// 				$v = iconv( "cp866", "utf-8", $v);
+	// 				$a[] = $v;
+	// 			}
+	// 			array_pop( $a ); // удаляем пустой элемент
+	//
+	// 			$combine = array_combine( $colomns_name, $a );
+	//
+	// 			// Делаем запись в БД !!!!
+	// 			// МАССИВ $combine передаем в качестве параметра
+	// 			// при вызове $wpdb->insert
+	//
+	// 		}
+	//
+	// 	dbase_close( $db );
+	//
+	// 	}
+	//
+	// }
 
 
 	// 5. ЗАГРУЖАЕМ ДАННЫЕ В `WP_POSTS`(формируем посты)
